@@ -9,6 +9,7 @@ interface Message {
 interface Props {
   repoUrl: string
   selectedFile: string | null
+  repoReady: boolean
 }
 
 const WELCOME: Message = {
@@ -17,7 +18,7 @@ const WELCOME: Message = {
     "Hi! I'm your codebase assistant. Ask me anything about this repository — where auth is handled, how data flows, where to add a feature, or what a file does.",
 }
 
-export default function ChatPanel({ repoUrl, selectedFile }: Props) {
+export default function ChatPanel({ repoUrl, selectedFile, repoReady }: Props) {
   const [messages, setMessages] = useState<Message[]>([WELCOME])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -101,15 +102,16 @@ export default function ChatPanel({ repoUrl, selectedFile }: Props) {
         <textarea
           className="chat-input"
           rows={2}
-          placeholder="Ask about this codebase… (Enter to send, Shift+Enter for newline)"
+          placeholder={repoReady ? "Ask about this codebase… (Enter to send, Shift+Enter for newline)" : "Analyzing repository, please wait…"}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
+          disabled={!repoReady}
         />
         <button
           className="btn-primary send-btn"
           onClick={sendMessage}
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !repoReady}
         >
           <Send size={14} />
         </button>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -16,46 +16,45 @@ import { Loader2 } from 'lucide-react'
 interface Props {
   repoUrl: string
   onSelectFile: (path: string) => void
+  repoReady: boolean
+  repoError: string | null
 }
 
-// Placeholder graph while backend isn't wired yet
-const PLACEHOLDER_NODES: Node[] = [
-  { id: '1', position: { x: 340, y: 40  }, data: { label: 'src/index.ts' },  type: 'default' },
-  { id: '2', position: { x: 160, y: 160 }, data: { label: 'App.tsx' },        type: 'default' },
-  { id: '3', position: { x: 520, y: 160 }, data: { label: 'router.ts' },      type: 'default' },
-  { id: '4', position: { x: 60,  y: 280 }, data: { label: 'Header.tsx' },     type: 'default' },
-  { id: '5', position: { x: 260, y: 280 }, data: { label: 'Dashboard.tsx' },  type: 'default' },
-  { id: '6', position: { x: 460, y: 280 }, data: { label: 'api/client.ts' },  type: 'default' },
-  { id: '7', position: { x: 620, y: 280 }, data: { label: 'utils/auth.ts' },  type: 'default' },
-]
+const EMPTY_NODES: Node[] = []
+const EMPTY_EDGES: Edge[] = []
 
-const PLACEHOLDER_EDGES: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', animated: true },
-  { id: 'e1-3', source: '1', target: '3' },
-  { id: 'e2-4', source: '2', target: '4' },
-  { id: 'e2-5', source: '2', target: '5' },
-  { id: 'e3-6', source: '3', target: '6' },
-  { id: 'e3-7', source: '3', target: '7' },
-]
+function layoutNodes(rawNodes: { id: string; data: { label: string }; type: string }[]): Node[] {
+  const COLS = 6
+  const COL_W = 220
+  const ROW_H = 80
+  return rawNodes.map((n, i) => ({
+    ...n,
+    position: { x: (i % COLS) * COL_W, y: Math.floor(i / COLS) * ROW_H },
+  }))
+}
 
-export default function GraphView({ repoUrl, onSelectFile }: Props) {
-  const [nodes, _setNodes, onNodesChange] = useNodesState(PLACEHOLDER_NODES)
-  const [edges, _setEdges, onEdgesChange] = useEdgesState(PLACEHOLDER_EDGES)
-  const [loading, setLoading] = useState(false)
-  const [error, _setError] = useState<string | null>(null)
+export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError }: Props) {
+  const [nodes, setNodes, onNodesChange] = useNodesState(EMPTY_NODES)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(EMPTY_EDGES)
 
+  // Dashboard already fetched the graph — read from cache
   useEffect(() => {
-    // TODO: fetch `/api/graph?repo=${encodeURIComponent(repoUrl)}` once backend ready
-    // For now, placeholder graph is shown
-    setLoading(false)
-  }, [repoUrl])
+    if (!repoReady) return
+    fetch(`/api/graph?repo=${encodeURIComponent(repoUrl)}`)
+      .then(res => res.json())
+      .then(data => {
+        setNodes(layoutNodes(data.nodes))
+        setEdges(data.edges.map((e: Edge) => ({ ...e, animated: false })))
+      })
+      .catch(() => {/* error shown by Dashboard */})
+  }, [repoReady, repoUrl])
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const label = node.data?.label
     if (typeof label === 'string') onSelectFile(label)
   }, [onSelectFile])
 
-  if (loading) {
+  if (!repoReady && !repoError) {
     return (
       <div className="graph-loading">
         <Loader2 size={24} className="spin" />
@@ -64,10 +63,20 @@ export default function GraphView({ repoUrl, onSelectFile }: Props) {
     )
   }
 
-  if (error) {
+  if (repoError) {
     return (
       <div className="graph-error">
-        <p>{error}</p>
+        <p>{repoError}</p>
+      </div>
+    )
+  }
+
+  if (repoReady && nodes.length === 0) {
+    return (
+      <div className="graph-loading">
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+          No JS/TS files found in this repository.
+        </p>
       </div>
     )
   }

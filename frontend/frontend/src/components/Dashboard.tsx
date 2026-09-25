@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import GraphView from './GraphView'
 import ChatPanel from './ChatPanel'
 import FileInspector from './FileInspector'
-import { Search, GitBranch, Zap, Map, MessageSquare, ChevronRight } from 'lucide-react'
+import { Search, GitBranch, Zap, Map, MessageSquare, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Props {
   repoUrl: string
@@ -15,8 +15,23 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
   const [activePanel, setActivePanel] = useState<PanelMode>('graph')
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [rightOpen, setRightOpen] = useState(true)
+  const [repoReady, setRepoReady] = useState(false)
+  const [repoError, setRepoError] = useState<string | null>(null)
 
   const repoName = repoUrl.replace('https://github.com/', '')
+
+  // Fetch + cache the repo on mount so all tabs have data
+  useEffect(() => {
+    setRepoReady(false)
+    setRepoError(null)
+    fetch(`/api/graph?repo=${encodeURIComponent(repoUrl)}`)
+      .then(res => {
+        if (!res.ok) return res.json().then(d => Promise.reject(d.detail ?? 'Server error'))
+        return res.json()
+      })
+      .then(() => setRepoReady(true))
+      .catch(err => setRepoError(String(err)))
+  }, [repoUrl])
 
   const navItems: { id: PanelMode; label: string; icon: React.ReactNode }[] = [
     { id: 'graph',      label: 'Graph',     icon: <GitBranch size={16} /> },
@@ -52,20 +67,22 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
         </nav>
 
         <div className="topbar-right">
-          <span className="status-dot" />
-          <span className="status-text">Ready</span>
+          {!repoReady && !repoError && <Loader2 size={13} className="spin" />}
+          <span className="status-dot" style={{ background: repoError ? '#ef4444' : repoReady ? 'var(--green)' : '#f59e0b' }} />
+          <span className="status-text">
+            {repoError ? 'Error' : repoReady ? 'Ready' : 'Analyzing…'}
+          </span>
         </div>
       </header>
 
       {/* ── Main workspace ── */}
       <div className="workspace">
-        {/* Center — Graph / main view */}
         <main className="main-view">
           {activePanel === 'graph' && (
-            <GraphView repoUrl={repoUrl} onSelectFile={setSelectedFile} />
+            <GraphView repoUrl={repoUrl} onSelectFile={setSelectedFile} repoReady={repoReady} repoError={repoError} />
           )}
           {activePanel === 'chat' && (
-            <ChatPanel repoUrl={repoUrl} selectedFile={selectedFile} />
+            <ChatPanel repoUrl={repoUrl} selectedFile={selectedFile} repoReady={repoReady} />
           )}
           {activePanel === 'impact' && (
             <div className="placeholder-panel">
@@ -83,7 +100,6 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
           )}
         </main>
 
-        {/* Right — File inspector */}
         {selectedFile && (
           <aside className={`right-panel ${rightOpen ? 'open' : 'closed'}`}>
             <button

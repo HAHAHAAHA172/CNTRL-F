@@ -19,7 +19,6 @@ def health():
     return {"status": "ok"}
 
 
-# Routers will be registered here as we build them:
-# from routers import analyze, chat
-# app.include_router(analyze.router)
-# app.include_router(chat.router)
+from routers import analyze, chat  # noqa: E402
+app.include_router(analyze.router)
+app.include_router(chat.router)
