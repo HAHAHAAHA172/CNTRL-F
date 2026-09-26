@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Zap, Loader2, AlertTriangle, ChevronRight } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Props {
   repoUrl: string
@@ -138,8 +140,10 @@ export default function ImpactPanel({ repoUrl, selectedFile, repoReady }: Props)
 
           {/* AI explanation */}
           <div className="impact-section-label" style={{ marginTop: 16 }}>AI Analysis</div>
-          <div className="impact-explanation">
-            <pre className="impact-pre">{result.explanation}</pre>
+          <div className="impact-explanation msg-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {result.explanation}
+            </ReactMarkdown>
           </div>
         </div>
       )}

@@ -9,7 +9,7 @@ def _get_model() -> genai.GenerativeModel:
     if _model is None:
         api_key = os.environ["GEMINI_API_KEY"]
         genai.configure(api_key=api_key)
-        _model = genai.GenerativeModel("gemini-2.5-flash")
+        _model = genai.GenerativeModel("gemini-3.8-flash")
     return _model
 
 
@@ -84,6 +84,90 @@ Files:
     except Exception:
         # Fallback: return paths with no enrichment
         return [{"path": s["path"], "label": s["path"].split("/")[-1], "category": "other"} for s in file_summaries]
+
+
+async def generate_onboarding(
+    file_summaries: list[dict],
+    file_contents: dict[str, str],
+    edges: list[dict],
+) -> list[dict]:
+    """
+    Generate a guided onboarding path through the repository.
+    Returns a list of steps, each with: title, description, files, tip.
+    """
+    import json
+
+    # Build a compact manifest: file paths, languages, symbols, and edge summary
+    file_lines = []
+    for s in file_summaries[:60]:
+        path = s["path"]
+        lang = s.get("language", "unknown")
+        symbols = ", ".join(s.get("symbols", [])[:5]) or "—"
+        imports = ", ".join(s.get("imports", [])[:5]) or "—"
+        file_lines.append(f"{path} [{lang}] symbols:{symbols} imports:{imports}")
+    manifest = "\n".join(file_lines)
+
+    # Summarize dependency edges
+    edge_lines = []
+    for e in edges[:80]:
+        edge_lines.append(f"{e['source']} → {e['target']}")
+    edge_summary = "\n".join(edge_lines) if edge_lines else "No dependency edges found."
+
+    prompt = f"""You are an expert developer onboarding guide. Given the following repository manifest (files, symbols, imports) and dependency graph, generate a learning path for a new developer.
+
+Return a JSON array of 5-7 steps. Each step has:
+- "title": short step title (e.g. "Project Structure Overview")
+- "description": 2-3 sentence explanation of what to learn in this step and why it matters
+- "files": array of 1-4 exact file paths from the manifest that are most relevant to this step
+- "tip": one practical tip for understanding this part of the codebase
+
+The steps should follow a logical learning order:
+1. Project structure & configuration
+2. Application entry point(s)
+3. Core business logic / main features
+4. Data layer / API routes
+5. Utilities & shared code
+6. Tests (if any)
+7. Suggested first contribution area
+
+Only include steps that are relevant based on the actual files present. Use exact file paths from the manifest.
+Only return the JSON array, no markdown, no explanation.
+
+## Files
+{manifest}
+
+## Dependencies
+{edge_summary}
+"""
+    model = _get_model()
+    response = model.generate_content(prompt)
+    text = response.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    try:
+        steps = json.loads(text)
+        # Validate structure
+        if isinstance(steps, list) and len(steps) > 0:
+            return steps
+    except Exception:
+        pass
+
+    # Fallback: generate a basic onboarding from static analysis
+    all_paths = [s["path"] for s in file_summaries]
+    entry_keywords = ["index", "main", "app", "server"]
+    entries = [p for p in all_paths if any(k in p.lower() for k in entry_keywords)][:3]
+    return [
+        {
+            "title": "Project Structure",
+            "description": f"This repository contains {len(all_paths)} analyzed files. Start by browsing the top-level directory structure.",
+            "files": all_paths[:3],
+            "tip": "Look at the folder names to understand how the project is organized.",
+        },
+        {
+            "title": "Entry Points",
+            "description": "These files are likely where the application starts.",
+            "files": entries or all_paths[:2],
+            "tip": "Trace the imports from the entry point to understand the dependency tree.",
+        },
+    ]
 
 
 async def ask(

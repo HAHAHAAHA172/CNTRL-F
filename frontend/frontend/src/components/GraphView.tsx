@@ -175,9 +175,25 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     theta: 0, phi: Math.PI / 2,
     targetTheta: 0, targetPhi: Math.PI / 2,
     radius: 500, targetRadius: 500,
-    isDragging: false, lastX: 0, lastY: 0,
+    isDragging: false,
+    startX: 0, startY: 0,
+    lastX: 0, lastY: 0,
     autoRotate: true,
   })
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reset idle timer & stop auto-rotation on any user interaction
+  const handleUserInteraction = useCallback(() => {
+    orbitRef.current.autoRotate = false
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current)
+    }
+    idleTimerRef.current = setTimeout(() => {
+      if (!orbitRef.current.isDragging) {
+        orbitRef.current.autoRotate = true
+      }
+    }, 5000)
+  }, [])
 
   const [loaded,     setLoaded]     = useState(false)
   const [hovered,    setHovered]    = useState<string | null>(null)
@@ -195,13 +211,16 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     scene.fog = new THREE.FogExp2(BG_COLOR, 0.0008)
     sceneRef.current = scene
 
-    const camera = new THREE.PerspectiveCamera(60, mount.clientWidth / mount.clientHeight, 1, 5000)
+    const initW = mount.clientWidth || 800
+    const initH = mount.clientHeight || 600
+
+    const camera = new THREE.PerspectiveCamera(60, initW / initH, 1, 5000)
     camera.position.set(0, 0, 500)
     cameraRef.current = camera
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(window.devicePixelRatio)
-    renderer.setSize(mount.clientWidth, mount.clientHeight)
+    renderer.setSize(initW, initH)
     mount.appendChild(renderer.domElement)
     rendererRef.current = renderer
 
@@ -219,9 +238,12 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
 
     // Resize
     const onResize = () => {
-      camera.aspect = mount.clientWidth / mount.clientHeight
+      const curW = mount.clientWidth
+      const curH = mount.clientHeight
+      if (curW <= 0 || curH <= 0) return
+      camera.aspect = curW / curH
       camera.updateProjectionMatrix()
-      renderer.setSize(mount.clientWidth, mount.clientHeight)
+      renderer.setSize(curW, curH)
     }
     const obs = new ResizeObserver(onResize)
     obs.observe(mount)
@@ -254,15 +276,23 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     return () => {
       cancelAnimationFrame(rafRef.current)
       obs.disconnect()
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current)
+      }
       renderer.dispose()
-      mount.removeChild(renderer.domElement)
+      if (mount.contains(renderer.domElement)) {
+        mount.removeChild(renderer.domElement)
+      }
     }
   }, [])
 
   // ── Build/rebuild scene graph ──────────────────────────────────────────
   const buildScene = useCallback((paths: string[], repoName: string, em: Record<string, string>) => {
     const scene = sceneRef.current
-    if (!scene) return
+    if (!scene) {
+      setTimeout(() => buildScene(paths, repoName, em), 60)
+      return
+    }
 
     // Clear old nodes/edges
     Object.values(meshMapRef.current).forEach(m => scene.remove(m))
@@ -320,6 +350,17 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     const lines = new THREE.LineSegments(lineGeo, lineMat)
     scene.add(lines)
     lineMapRef.current = lines
+
+    // Ensure camera & renderer sizes sync
+    if (mountRef.current && rendererRef.current && cameraRef.current) {
+      const mw = mountRef.current.clientWidth
+      const mh = mountRef.current.clientHeight
+      if (mw > 0 && mh > 0) {
+        cameraRef.current.aspect = mw / mh
+        cameraRef.current.updateProjectionMatrix()
+        rendererRef.current.setSize(mw, mh)
+      }
+    }
   }, [])
 
   // ── Fetch graph ────────────────────────────────────────────────────────
@@ -328,13 +369,16 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     fetch(`/api/graph?repo=${encodeURIComponent(repoUrl)}`)
       .then(r => r.json())
       .then(data => {
-        const paths: string[] = data.nodes.map((n: { id: string }) => n.id)
+        const paths: string[] = (data.nodes || []).map((n: { id: string }) => n.id)
         const repoName = repoUrl.split('/').pop() ?? 'repo'
         rawRef.current = { paths, repoName }
         buildScene(paths, repoName, enrichMap)
         setLoaded(true)
       })
-  }, [repoReady, repoUrl])
+      .catch(err => {
+        console.error('Failed to load graph:', err)
+      })
+  }, [repoReady, repoUrl, buildScene, enrichMap])
 
   // ── Fetch enrichment ───────────────────────────────────────────────────
   useEffect(() => {
@@ -348,7 +392,7 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
         if (rawRef.current) buildScene(rawRef.current.paths, rawRef.current.repoName, map)
       })
       .catch(() => {})
-  }, [loaded, repoUrl])
+  }, [loaded, repoUrl, buildScene])
 
   // ── Hover / Select (raycasting) ────────────────────────────────────────
   const raycast = useCallback((clientX: number, clientY: number): string | null => {
@@ -406,6 +450,8 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
 
   // Mouse events
   const onMouseMove = useCallback((e: React.MouseEvent) => {
+    handleUserInteraction()
+
     if (orbitRef.current.isDragging) {
       const dx = e.clientX - orbitRef.current.lastX
       const dy = e.clientY - orbitRef.current.lastY
@@ -418,19 +464,24 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     const hit = raycast(e.clientX, e.clientY)
     setHovered(hit)
     applyHighlight(hit, selected)
-  }, [raycast, applyHighlight, selected])
+  }, [handleUserInteraction, raycast, applyHighlight, selected])
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    handleUserInteraction()
     orbitRef.current.isDragging = true
-    orbitRef.current.autoRotate = false
+    orbitRef.current.startX = e.clientX
+    orbitRef.current.startY = e.clientY
     orbitRef.current.lastX = e.clientX
     orbitRef.current.lastY = e.clientY
-  }, [])
+  }, [handleUserInteraction])
 
   const onMouseUp = useCallback((e: React.MouseEvent) => {
-    const wasDrag = Math.abs(e.clientX - orbitRef.current.lastX) + Math.abs(e.clientY - orbitRef.current.lastY) < 4
+    handleUserInteraction()
+    const dist = Math.hypot(e.clientX - orbitRef.current.startX, e.clientY - orbitRef.current.startY)
+    const isClick = dist < 5
     orbitRef.current.isDragging = false
-    if (wasDrag) {
+
+    if (isClick) {
       const hit = raycast(e.clientX, e.clientY)
       if (hit) {
         const nd = nodesRef.current.find(n => n.id === hit)
@@ -438,26 +489,26 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
         applyHighlight(hovered, hit)
         if (nd?.kind === 'file') onSelectFile(hit)
       } else {
-        // Click empty space — resume auto-rotate
-        orbitRef.current.autoRotate = true
         setSelected(null)
         applyHighlight(hovered, null)
       }
     }
-  }, [raycast, applyHighlight, hovered, onSelectFile])
+  }, [handleUserInteraction, raycast, applyHighlight, hovered, onSelectFile])
+
+  const onMouseLeave = useCallback(() => {
+    orbitRef.current.isDragging = false
+    setHovered(null)
+    applyHighlight(null, selected)
+    handleUserInteraction()
+  }, [handleUserInteraction, applyHighlight, selected])
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
+    handleUserInteraction()
     orbitRef.current.targetRadius = Math.max(80, Math.min(1200,
       orbitRef.current.targetRadius + e.deltaY * 0.5
     ))
-  }, [])
-
-  // ── States ─────────────────────────────────────────────────────────────
-  if (!repoReady && !repoError) return (
-    <div className="graph-loading"><Loader2 size={24} className="spin" /><span>Analyzing…</span></div>
-  )
-  if (repoError) return <div className="graph-error"><p>{repoError}</p></div>
+  }, [handleUserInteraction])
 
   const hovNode = hovered ? nodesRef.current.find(n => n.id === hovered) : null
 
@@ -469,11 +520,26 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       onMouseMove={onMouseMove}
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
-      onMouseLeave={() => { orbitRef.current.isDragging = false; setHovered(null); applyHighlight(null, selected) }}
+      onMouseLeave={onMouseLeave}
       onWheel={onWheel}
     >
+      {/* Loading overlay */}
+      {(!repoReady || !loaded) && !repoError && (
+        <div className="graph-loading">
+          <Loader2 size={24} className="spin" />
+          <span>{!repoReady ? 'Analyzing repository…' : 'Building 3D graph…'}</span>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {repoError && (
+        <div className="graph-error">
+          <p>{repoError}</p>
+        </div>
+      )}
+
       {/* HUD tooltip */}
-      {hovNode && (
+      {loaded && hovNode && (
         <div className="graph-tooltip">
           <span style={{ color: `#${hovNode.color.toString(16).padStart(6, '0')}` }}>●</span>
           &nbsp;{hovNode.kind === 'file' ? hovNode.id : hovNode.label}
@@ -482,28 +548,32 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       )}
 
       {/* Legend */}
-      <div className="graph-legend">
-        {[
-          { label: 'root',   color: '#6366f1' },
-          { label: 'folder', color: '#475569' },
-          { label: '.ts',    color: '#3b82f6' },
-          { label: '.tsx',   color: '#6366f1' },
-          { label: '.js',    color: '#f59e0b' },
-          { label: '.py',    color: '#22c55e' },
-          { label: '.java',  color: '#ef4444' },
-          { label: '.go',    color: '#06b6d4' },
-        ].map(({ label, color }) => (
-          <div key={label} className="legend-item">
-            <span className="legend-dot" style={{ background: color }} />
-            <span>{label}</span>
-          </div>
-        ))}
-      </div>
+      {loaded && (
+        <div className="graph-legend">
+          {[
+            { label: 'root',   color: '#6366f1' },
+            { label: 'folder', color: '#475569' },
+            { label: '.ts',    color: '#3b82f6' },
+            { label: '.tsx',   color: '#6366f1' },
+            { label: '.js',    color: '#f59e0b' },
+            { label: '.py',    color: '#22c55e' },
+            { label: '.java',  color: '#ef4444' },
+            { label: '.go',    color: '#06b6d4' },
+          ].map(({ label, color }) => (
+            <div key={label} className="legend-item">
+              <span className="legend-dot" style={{ background: color }} />
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Controls hint */}
-      <div style={{ position: 'absolute', top: 12, left: 12, fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }}>
-        Drag to rotate · Scroll to zoom · Click node to inspect
-      </div>
+      {loaded && (
+        <div style={{ position: 'absolute', top: 12, left: 12, fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }}>
+          Drag to rotate · Scroll to zoom · Click node to inspect
+        </div>
+      )}
     </div>
   )
 }

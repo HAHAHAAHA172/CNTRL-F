@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
 import { Send, Loader2, Bot, User } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -83,7 +85,15 @@ export default function ChatPanel({ repoUrl, selectedFile, repoReady }: Props) {
               {msg.role === 'assistant' ? <Bot size={14} /> : <User size={14} />}
             </div>
             <div className="msg-content">
-              <pre className="msg-text">{msg.content}</pre>
+              {msg.role === 'assistant' ? (
+                <div className="msg-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <div className="msg-text">{msg.content}</div>
+              )}
             </div>
           </div>
         ))}

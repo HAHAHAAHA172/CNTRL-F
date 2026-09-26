@@ -3,6 +3,7 @@ import GraphView from './GraphView'
 import ChatPanel from './ChatPanel'
 import FileInspector from './FileInspector'
 import ImpactPanel from './ImpactPanel'
+import OnboardingPanel from './OnboardingPanel'
 import { Search, GitBranch, Zap, Map, MessageSquare, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Props {
@@ -89,11 +90,7 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
             <ImpactPanel repoUrl={repoUrl} selectedFile={selectedFile} repoReady={repoReady} />
           )}
           {activePanel === 'onboarding' && (
-            <div className="placeholder-panel">
-              <Map size={32} className="placeholder-icon" />
-              <h2>Guided Onboarding</h2>
-              <p>Generating your learning path…</p>
-            </div>
+            <OnboardingPanel repoUrl={repoUrl} repoReady={repoReady} onSelectFile={setSelectedFile} />
           )}
         </main>
 

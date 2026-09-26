@@ -19,7 +19,8 @@ def health():
     return {"status": "ok"}
 
 
-from routers import analyze, chat, impact  # noqa: E402
+from routers import analyze, chat, impact, onboarding  # noqa: E402
 app.include_router(analyze.router)
 app.include_router(chat.router)
 app.include_router(impact.router)
+app.include_router(onboarding.router)
