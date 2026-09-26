@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { Loader2 } from 'lucide-react'
+import { API_BASE } from '../config'
 
 interface Props {
   repoUrl: string
@@ -366,8 +367,11 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
   // ── Fetch graph ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!repoReady) return
-    fetch(`/api/graph?repo=${encodeURIComponent(repoUrl)}`)
-      .then(r => r.json())
+    fetch(`${API_BASE}/api/graph?repo=${encodeURIComponent(repoUrl)}`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         const paths: string[] = (data.nodes || []).map((n: { id: string }) => n.id)
         const repoName = repoUrl.split('/').pop() ?? 'repo'
@@ -383,9 +387,13 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
   // ── Fetch enrichment ───────────────────────────────────────────────────
   useEffect(() => {
     if (!loaded) return
-    fetch(`/api/enriched?repo=${encodeURIComponent(repoUrl)}`)
-      .then(r => r.json())
+    fetch(`${API_BASE}/api/enriched?repo=${encodeURIComponent(repoUrl)}`)
+      .then(r => {
+        if (!r.ok) return null
+        return r.json()
+      })
       .then(data => {
+        if (!data) return
         const map: Record<string, string> = {}
         for (const item of data.enriched ?? []) map[item.path] = item.label
         setEnrichMap(map)

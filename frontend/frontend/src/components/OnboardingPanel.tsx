@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Map, Loader2, BookOpen, Lightbulb, FileCode, ChevronRight, ChevronDown, RotateCcw } from 'lucide-react'
+import { API_BASE, parseApiError } from '../config'
 
 interface Props {
   repoUrl: string
@@ -29,9 +30,12 @@ export default function OnboardingPanel({ repoUrl, repoReady, onSelectFile }: Pr
   function fetchOnboarding() {
     setLoading(true)
     setError(null)
-    fetch(`/api/onboarding?repo=${encodeURIComponent(repoUrl)}`)
-      .then(r => {
-        if (!r.ok) return r.json().then(d => Promise.reject(d.detail ?? 'Server error'))
+    fetch(`${API_BASE}/api/onboarding?repo=${encodeURIComponent(repoUrl)}`)
+      .then(async r => {
+        if (!r.ok) {
+          const detail = await parseApiError(r)
+          return Promise.reject(detail)
+        }
         return r.json()
       })
       .then(data => {

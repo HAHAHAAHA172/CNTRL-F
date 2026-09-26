@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
 import { Send, Loader2, Bot, User } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { API_BASE } from '../config'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -40,7 +41,7 @@ export default function ChatPanel({ repoUrl, selectedFile, repoReady }: Props) {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -2,13 +2,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+import os
+
 load_dotenv()
+
+cors_env = os.getenv("CORS_ORIGINS", "*")
+origins = [o.strip() for o in cors_env.split(",") if o.strip()] if cors_env != "*" else ["*"]
 
 app = FastAPI(title="CNTRL F API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
+    allow_credentials=origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -6,6 +6,8 @@ import ImpactPanel from './ImpactPanel'
 import OnboardingPanel from './OnboardingPanel'
 import { Search, GitBranch, Zap, Map, MessageSquare, ChevronRight, Loader2 } from 'lucide-react'
 
+import { API_BASE, parseApiError } from '../config'
+
 interface Props {
   repoUrl: string
   onReset: () => void
@@ -26,9 +28,12 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
   useEffect(() => {
     setRepoReady(false)
     setRepoError(null)
-    fetch(`/api/graph?repo=${encodeURIComponent(repoUrl)}`)
-      .then(res => {
-        if (!res.ok) return res.json().then(d => Promise.reject(d.detail ?? 'Server error'))
+    fetch(`${API_BASE}/api/graph?repo=${encodeURIComponent(repoUrl)}`)
+      .then(async res => {
+        if (!res.ok) {
+          const detail = await parseApiError(res)
+          return Promise.reject(detail)
+        }
         return res.json()
       })
       .then(() => setRepoReady(true))

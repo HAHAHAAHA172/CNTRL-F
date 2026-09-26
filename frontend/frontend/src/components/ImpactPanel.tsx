@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Zap, Loader2, AlertTriangle, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { API_BASE, parseApiError } from '../config'
 
 interface Props {
   repoUrl: string
@@ -28,9 +29,12 @@ export default function ImpactPanel({ repoUrl, selectedFile, repoReady }: Props)
     setError(null)
     setResult(null)
     setTracedFile(file)
-    fetch(`/api/impact?repo=${encodeURIComponent(repoUrl)}&file=${encodeURIComponent(file)}`)
-      .then(r => {
-        if (!r.ok) return r.json().then(d => Promise.reject(d.detail ?? 'Server error'))
+    fetch(`${API_BASE}/api/impact?repo=${encodeURIComponent(repoUrl)}&file=${encodeURIComponent(file)}`)
+      .then(async r => {
+        if (!r.ok) {
+          const detail = await parseApiError(r)
+          return Promise.reject(detail)
+        }
         return r.json()
       })
       .then(data => setResult(data))
