@@ -123,8 +123,9 @@ function layoutOrbital(nodes: GNode[], edges: GEdge[]) {
     const idx = siblings.indexOf(n.id)
     const total = siblings.length
 
-    // Distribute evenly on a sphere shell using Fibonacci spiral
-    const radius = 60 + d * 90
+    // Distribute evenly on a sphere shell using Fibonacci spiral with dynamic spacing for dense shells
+    const shellExtra = Math.max(0, Math.sqrt(total) * 14)
+    const radius = 70 + d * 95 + shellExtra
     const goldenAngle = Math.PI * (3 - Math.sqrt(5))
     const theta = goldenAngle * idx
     const phi = Math.acos(1 - (2 * (idx + 0.5)) / total)
@@ -176,6 +177,7 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     theta: 0, phi: Math.PI / 2,
     targetTheta: 0, targetPhi: Math.PI / 2,
     radius: 500, targetRadius: 500,
+    minRadius: 60, maxRadius: 5000,
     isDragging: false,
     startX: 0, startY: 0,
     lastX: 0, lastY: 0,
@@ -209,13 +211,13 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
 
     const scene    = new THREE.Scene()
     scene.background = new THREE.Color(BG_COLOR)
-    scene.fog = new THREE.FogExp2(BG_COLOR, 0.0008)
+    scene.fog = new THREE.FogExp2(BG_COLOR, 0.00025)
     sceneRef.current = scene
 
     const initW = mount.clientWidth || 800
     const initH = mount.clientHeight || 600
 
-    const camera = new THREE.PerspectiveCamera(60, initW / initH, 1, 5000)
+    const camera = new THREE.PerspectiveCamera(60, initW / initH, 1, 30000)
     camera.position.set(0, 0, 500)
     cameraRef.current = camera
 
@@ -231,11 +233,11 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     pLight.position.set(0, 0, 0)
     scene.add(pLight)
 
-    // Subtle starfield
+    // Deep starfield
     const starGeo = new THREE.BufferGeometry()
-    const starPos = new Float32Array(3000).map(() => (Math.random() - 0.5) * 4000)
+    const starPos = new Float32Array(4500).map(() => (Math.random() - 0.5) * 16000)
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.8, transparent: true, opacity: 0.3 })))
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, opacity: 0.35 })))
 
     // Resize
     const onResize = () => {
@@ -351,6 +353,21 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     const lines = new THREE.LineSegments(lineGeo, lineMat)
     scene.add(lines)
     lineMapRef.current = lines
+
+    // Dynamically calculate camera radius and zoom limits based on graph size
+    let maxDist = 250
+    nodes.forEach(n => {
+      const d = n.position.length()
+      if (d > maxDist) maxDist = d
+    })
+
+    const initialRadius = Math.max(500, maxDist * 1.5)
+    const maxZoomOut = Math.max(4000, maxDist * 4, nodes.length * 25)
+
+    orbitRef.current.minRadius = 60
+    orbitRef.current.maxRadius = maxZoomOut
+    orbitRef.current.radius = initialRadius
+    orbitRef.current.targetRadius = initialRadius
 
     // Ensure camera & renderer sizes sync
     if (mountRef.current && rendererRef.current && cameraRef.current) {
@@ -513,9 +530,12 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
     handleUserInteraction()
-    orbitRef.current.targetRadius = Math.max(80, Math.min(1200,
-      orbitRef.current.targetRadius + e.deltaY * 0.5
-    ))
+    const o = orbitRef.current
+    const minR = o.minRadius ?? 60
+    const maxR = o.maxRadius ?? 5000
+    // Proportional zoom: scales smoothly whether close or zoomed far out
+    const zoomDelta = e.deltaY * (o.targetRadius * 0.0018)
+    o.targetRadius = Math.max(minR, Math.min(maxR, o.targetRadius + zoomDelta))
   }, [handleUserInteraction])
 
   const hovNode = hovered ? nodesRef.current.find(n => n.id === hovered) : null
