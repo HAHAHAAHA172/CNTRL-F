@@ -97,7 +97,7 @@ export default function LandingPage({ onAnalyze }: Props) {
       </main>
 
       <footer className="landing-footer">
-        Built with IBM Bob 2.0
+        Built with IBM Bob 2.0 and Antigravity
       </footer>
     </div>
   )
