@@ -118,7 +118,13 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
               />
             </button>
             {rightOpen && (
-              <FileInspector filePath={selectedFile} repoUrl={repoUrl} />
+              <FileInspector
+                filePath={selectedFile}
+                repoUrl={repoUrl}
+                onSelectFile={setSelectedFile}
+                onTraceImpact={() => setActivePanel('impact')}
+                onAskAI={() => setActivePanel('chat')}
+              />
             )}
           </aside>
         )}

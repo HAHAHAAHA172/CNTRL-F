@@ -79,3 +79,30 @@ async def get_enriched(repo: str = Query(...)):
 
     cached["enriched"] = enriched
     return {"enriched": enriched}
+
+
+@router.get("/api/file")
+async def get_file_details(repo: str = Query(...), path: str = Query(...)):
+    cached = _cache.get(repo)
+    if not cached:
+        raise HTTPException(status_code=400, detail="Repository not analyzed yet.")
+
+    edges = cached.get("edges", [])
+    summaries = cached.get("summaries", [])
+    contents = cached.get("contents", {})
+
+    imports = [e["target"] for e in edges if e.get("source") == path]
+    used_by = [e["source"] for e in edges if e.get("target") == path]
+
+    summary = next((s for s in summaries if s["path"] == path), None)
+    content = contents.get(path, "")
+
+    return {
+        "path": path,
+        "imports": imports,
+        "used_by": used_by,
+        "language": summary["language"] if summary else "unknown",
+        "symbols": summary.get("symbols", []) if summary else [],
+        "lines": summary.get("lines", content.count("\n") + 1) if summary else (content.count("\n") + 1 if content else 0),
+    }
+

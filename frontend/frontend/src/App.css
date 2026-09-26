@@ -452,6 +452,34 @@
   font-style: italic;
 }
 
+.inspector-dep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inspector-dep-item {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--accent);
+  transition: background 0.15s, color 0.15s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-dep-item:hover {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--text-h);
+}
+
+
 .inspector-actions {
   display: flex;
   gap: 8px;
