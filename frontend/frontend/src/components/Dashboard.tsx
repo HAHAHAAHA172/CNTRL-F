@@ -85,18 +85,24 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
       {/* ── Main workspace ── */}
       <div className="workspace">
         <main className="main-view">
-          {activePanel === 'graph' && (
-            <GraphView repoUrl={repoUrl} onSelectFile={setSelectedFile} repoReady={repoReady} repoError={repoError} />
-          )}
-          {activePanel === 'chat' && (
+          <div style={{ display: activePanel === 'graph' ? 'block' : 'none', height: '100%', width: '100%' }}>
+            <GraphView
+              repoUrl={repoUrl}
+              onSelectFile={setSelectedFile}
+              repoReady={repoReady}
+              repoError={repoError}
+              visible={activePanel === 'graph'}
+            />
+          </div>
+          <div style={{ display: activePanel === 'chat' ? 'flex' : 'none', flexDirection: 'column', height: '100%', width: '100%' }}>
             <ChatPanel repoUrl={repoUrl} selectedFile={selectedFile} repoReady={repoReady} />
-          )}
-          {activePanel === 'impact' && (
+          </div>
+          <div style={{ display: activePanel === 'impact' ? 'flex' : 'none', flexDirection: 'column', height: '100%', width: '100%' }}>
             <ImpactPanel repoUrl={repoUrl} selectedFile={selectedFile} repoReady={repoReady} />
-          )}
-          {activePanel === 'onboarding' && (
+          </div>
+          <div style={{ display: activePanel === 'onboarding' ? 'flex' : 'none', flexDirection: 'column', height: '100%', width: '100%' }}>
             <OnboardingPanel repoUrl={repoUrl} repoReady={repoReady} onSelectFile={setSelectedFile} />
-          )}
+          </div>
         </main>
 
         {selectedFile && (

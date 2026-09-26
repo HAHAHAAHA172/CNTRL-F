@@ -8,6 +8,7 @@ interface Props {
   onSelectFile: (path: string) => void
   repoReady: boolean
   repoError: string | null
+  visible?: boolean
 }
 
 // ── Color palette ──────────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ function makeLabel(text: string, color: string): THREE.Sprite {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError }: Props) {
+export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError, visible = true }: Props) {
   const mountRef   = useRef<HTMLDivElement>(null)
   const sceneRef   = useRef<THREE.Scene | null>(null)
   const cameraRef  = useRef<THREE.PerspectiveCamera | null>(null)
@@ -280,8 +281,10 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
         o.radius * Math.cos(o.phi),
         o.radius * Math.sin(o.phi) * Math.cos(o.theta),
       )
-      camera.lookAt(0, 0, 0)
-      renderer.render(scene, camera)
+      if (mount.clientWidth > 0 && mount.clientHeight > 0) {
+        camera.lookAt(0, 0, 0)
+        renderer.render(scene, camera)
+      }
     }
     animate()
 
@@ -389,6 +392,19 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       }
     }
   }, [])
+
+  // Sync viewport when tab becomes active again
+  useEffect(() => {
+    if (visible && mountRef.current && rendererRef.current && cameraRef.current) {
+      const mw = mountRef.current.clientWidth
+      const mh = mountRef.current.clientHeight
+      if (mw > 0 && mh > 0) {
+        cameraRef.current.aspect = mw / mh
+        cameraRef.current.updateProjectionMatrix()
+        rendererRef.current.setSize(mw, mh)
+      }
+    }
+  }, [visible])
 
   // ── Fetch graph ────────────────────────────────────────────────────────
   useEffect(() => {
