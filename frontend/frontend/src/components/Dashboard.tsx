@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import GraphView from './GraphView'
 import ChatPanel from './ChatPanel'
 import FileInspector from './FileInspector'
+import ImpactPanel from './ImpactPanel'
 import { Search, GitBranch, Zap, Map, MessageSquare, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Props {
@@ -85,11 +86,7 @@ export default function Dashboard({ repoUrl, onReset }: Props) {
             <ChatPanel repoUrl={repoUrl} selectedFile={selectedFile} repoReady={repoReady} />
           )}
           {activePanel === 'impact' && (
-            <div className="placeholder-panel">
-              <Zap size={32} className="placeholder-icon" />
-              <h2>Impact Explorer</h2>
-              <p>Select a file in the graph to trace its impact across the codebase.</p>
-            </div>
+            <ImpactPanel repoUrl={repoUrl} selectedFile={selectedFile} repoReady={repoReady} />
           )}
           {activePanel === 'onboarding' && (
             <div className="placeholder-panel">

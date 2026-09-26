@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from services.github import parse_repo_url, get_default_branch, get_file_tree, get_file_content
-from services.parser import build_graph, extract_file_summary, JS_TS_EXTENSIONS
+from services.parser import build_graph, extract_file_summary, ALL_EXTENSIONS
+from services.ai import enrich_nodes
 
 router = APIRouter()
 
@@ -8,8 +9,10 @@ router = APIRouter()
 _cache: dict[str, dict] = {}
 
 
-def _is_js_ts(path: str) -> bool:
-    return any(path.endswith(ext) for ext in JS_TS_EXTENSIONS)
+def _is_supported(path: str) -> bool:
+    dot = path.rfind(".")
+    ext = path[dot:] if dot != -1 else ""
+    return ext in ALL_EXTENSIONS
 
 
 @router.get("/api/graph")
@@ -29,11 +32,11 @@ async def get_graph(repo: str = Query(..., description="GitHub repository URL"))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"GitHub API error: {e}")
 
-    # Fetch only JS/TS files (cap at 80 to stay within rate limits)
-    js_files = [item for item in tree if _is_js_ts(item["path"])][:80]
+    # Fetch supported files (cap at 120 across all languages)
+    supported_files = [item for item in tree if _is_supported(item["path"])][:120]
 
     file_contents: dict[str, str] = {}
-    for item in js_files:
+    for item in supported_files:
         try:
             content = await get_file_content(owner, name, item["path"])
             file_contents[item["path"]] = content
@@ -57,3 +60,22 @@ async def get_graph(repo: str = Query(..., description="GitHub repository URL"))
 @router.get("/api/graph/cache")
 async def list_cached():
     return {"repos": list(_cache.keys())}
+
+
+@router.get("/api/enriched")
+async def get_enriched(repo: str = Query(...)):
+    cached = _cache.get(repo)
+    if not cached:
+        raise HTTPException(status_code=400, detail="Repository not analyzed yet.")
+
+    # Return cached enrichment if already done
+    if "enriched" in cached:
+        return {"enriched": cached["enriched"]}
+
+    try:
+        enriched = await enrich_nodes(cached["summaries"], cached["contents"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    cached["enriched"] = enriched
+    return {"enriched": enriched}
