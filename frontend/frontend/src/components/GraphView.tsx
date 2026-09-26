@@ -26,9 +26,9 @@ const EXT_COLOR: Record<string, number> = {
   json: 0x64748b, yaml: 0x64748b, yml: 0x64748b,
   md: 0x94a3b8,
 }
-const ROOT_COLOR   = 0x6366f1
-const FOLDER_COLOR = 0x475569
-const BG_COLOR     = 0x080b12
+const ROOT_COLOR   = 0x818cf8
+const FOLDER_COLOR = 0x38bdf8
+const BG_COLOR     = 0x090e1a
 
 function extColor(filename: string): number {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
@@ -211,13 +211,13 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
 
     const scene    = new THREE.Scene()
     scene.background = new THREE.Color(BG_COLOR)
-    scene.fog = new THREE.FogExp2(BG_COLOR, 0.00025)
+    // No heavy fog so distant nodes stay bright and visible
     sceneRef.current = scene
 
     const initW = mount.clientWidth || 800
     const initH = mount.clientHeight || 600
 
-    const camera = new THREE.PerspectiveCamera(60, initW / initH, 1, 30000)
+    const camera = new THREE.PerspectiveCamera(60, initW / initH, 1, 35000)
     camera.position.set(0, 0, 500)
     cameraRef.current = camera
 
@@ -227,17 +227,26 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     mount.appendChild(renderer.domElement)
     rendererRef.current = renderer
 
-    // Ambient + point lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4))
-    const pLight = new THREE.PointLight(0x6366f1, 2, 800)
+    // Bright studio lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2))
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4)
+    keyLight.position.set(2000, 3000, 2500)
+    scene.add(keyLight)
+
+    const fillLight = new THREE.DirectionalLight(0x818cf8, 0.9)
+    fillLight.position.set(-2000, -1500, -2000)
+    scene.add(fillLight)
+
+    const pLight = new THREE.PointLight(0xa5b4fc, 2.5, 0, 0.5)
     pLight.position.set(0, 0, 0)
     scene.add(pLight)
 
-    // Deep starfield
+    // Crisp bright starfield
     const starGeo = new THREE.BufferGeometry()
-    const starPos = new Float32Array(4500).map(() => (Math.random() - 0.5) * 16000)
+    const starPos = new Float32Array(5000).map(() => (Math.random() - 0.5) * 16000)
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, opacity: 0.35 })))
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xf1f5f9, size: 1.5, transparent: true, opacity: 0.6 })))
 
     // Resize
     const onResize = () => {
@@ -317,9 +326,9 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       const mat = new THREE.MeshStandardMaterial({
         color: n.color,
         emissive: n.color,
-        emissiveIntensity: n.kind === 'root' ? 0.6 : 0.25,
-        roughness: 0.3,
-        metalness: 0.5,
+        emissiveIntensity: n.kind === 'root' ? 0.8 : n.kind === 'folder' ? 0.55 : 0.45,
+        roughness: 0.15,
+        metalness: 0.1,
         transparent: true,
         opacity: 1,
       })
@@ -330,7 +339,7 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       meshMapRef.current[n.id] = mesh
 
       // Label sprite
-      const labelColor = n.kind === 'root' ? '#e0e7ff' : n.kind === 'folder' ? '#cbd5e1' : '#94a3b8'
+      const labelColor = n.kind === 'root' ? '#ffffff' : n.kind === 'folder' ? '#e2e8f0' : '#cbd5e1'
       const sprite = makeLabel(n.label, labelColor)
       sprite.position.set(0, r + 8, 0)
       sprite.userData.isLabel = true
@@ -339,7 +348,7 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       mesh.add(sprite)
     })
 
-    // Edge lines
+    // Edge lines - bright and clearly visible
     const linePositions: number[] = []
     edges.forEach(e => {
       const s = nodes[nodeIdx[e.source]], t = nodes[nodeIdx[e.target]]
@@ -349,7 +358,7 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     })
     const lineGeo = new THREE.BufferGeometry()
     lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(linePositions), 3))
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x2e3a55, transparent: true, opacity: 0.5 })
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.65 })
     const lines = new THREE.LineSegments(lineGeo, lineMat)
     scene.add(lines)
     lineMapRef.current = lines
@@ -456,8 +465,10 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
       const isActive = n.id === hovId || n.id === selId || hoverConn.has(n.id) || selConn.has(n.id)
       const isNone   = !hovId && !selId
 
-      mat.opacity = isNone ? 1 : isActive ? 1 : 0.15
-      mat.emissiveIntensity = n.id === selId ? 1.2 : n.id === hovId ? 0.9 : isActive ? 0.4 : 0.1
+      mat.opacity = isNone ? 1 : isActive ? 1 : 0.2
+      mat.emissiveIntensity = isNone
+        ? (n.kind === 'root' ? 0.8 : n.kind === 'folder' ? 0.55 : 0.45)
+        : (n.id === selId ? 1.4 : n.id === hovId ? 1.1 : isActive ? 0.65 : 0.15)
 
       // Show file labels on hover/select
       const sprite = mesh.children.find(c => c.userData.isLabel)
@@ -469,7 +480,7 @@ export default function GraphView({ repoUrl, onSelectFile, repoReady, repoError 
     // Edge color
     if (lineMapRef.current) {
       const lm = lineMapRef.current.material as THREE.LineBasicMaterial
-      lm.opacity = hovId || selId ? 0.15 : 0.45
+      lm.opacity = hovId || selId ? 0.25 : 0.65
     }
   }, [])
 
