@@ -179,19 +179,36 @@ async def ask(
     relevant = find_relevant_files(question, file_summaries, file_context)
 
     if not relevant:
-        entry_candidates = ["src/index.ts", "src/index.tsx", "src/main.ts", "src/main.tsx", "index.js", "index.ts"]
-        relevant = [p for p in entry_candidates if p in file_contents][:3]
+        entry_keywords = ["readme", "index", "main", "app", "server", "config", "mod", "lib"]
+        candidates = [
+            p for p in file_contents
+            if any(k in p.lower() for k in entry_keywords)
+        ]
+        relevant = candidates[:4] if candidates else list(file_contents.keys())[:4]
 
-    context = build_context(file_summaries, relevant, file_contents)
+    code_context = build_context(file_summaries, relevant, file_contents)
 
-    prompt = f"""You are a codebase assistant. Answer questions about the repository using only the code provided below.
-Always reference specific files and line numbers where relevant. Be concise and technical.
+    # Build a file list manifest so Gemini always knows what files exist in the repo
+    all_files = [s["path"] for s in file_summaries[:80]]
+    files_overview = "\n".join(f"- {f}" for f in all_files) if all_files else "None"
 
-## Repository Context
-{context}
+    selected_info = f"\nCurrently Focused File: `{file_context}`\n" if file_context else ""
 
-## Question
+    prompt = f"""You are an expert codebase assistant for this software repository.
+{selected_info}
+## Repository Files
+{files_overview}
+
+## Key File Snippets
+{code_context}
+
+## User Question
 {question}
+
+## Guidelines
+- If the user greets you or asks for an overview, introduce the repository structure and mention what kind of project this is based on the files and snippets.
+- Answer technical questions accurately using the code provided. Reference file paths directly.
+- Be clear, helpful, and concise.
 
 ## Answer
 """
