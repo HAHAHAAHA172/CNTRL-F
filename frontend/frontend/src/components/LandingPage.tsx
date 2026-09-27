@@ -5,7 +5,7 @@ interface Props {
   onAnalyze: (url: string) => void
 }
 
-const DEMO_URL = 'https://github.com/vercel/next.js'
+const DEMO_URL = 'https://github.com/HAHAHAAHA172/CNTRL-F'
 
 const FEATURES = [
   {
